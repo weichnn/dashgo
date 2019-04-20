@@ -107,8 +107,8 @@ class NavSquare():
             # Get the starting position values     
             (position, rotation) = self.get_odom()
                         
-            x_start = position.z
-            y_start = position.x
+            x_start = position.x
+            y_start = position.y
             
             # Keep track of the distance traveled
             distance = 0
@@ -124,8 +124,10 @@ class NavSquare():
                 (position, rotation) = self.get_odom()
                 
                 # Compute the Euclidean distance from the start
-                distance = sqrt(pow((position.x - x_start), 2) + 
-                                pow((position.y - y_start), 2))
+                distance = sqrt(pow((position.z - x_start), 2) + 
+                                pow((position.x - y_start), 2))
+                # rospy.loginfo("x: "+position.z+"y: "+position.x+"distance: "+ distance)
+                
                 
             # Stop the robot before rotating
             move_cmd = Twist()
