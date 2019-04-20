@@ -31,6 +31,8 @@ import PyKDL
 
 def quat_to_angle(quat):
     rot = PyKDL.Rotation.Quaternion(quat.x, quat.y, quat.z, quat.w)
+    check_result = rot*PyKDL.Rotation.Vector(1.0,0.0,0.0)
+    print check_result.x(), check_result.y(), check_result.z() 
     return rot.GetRPY()[2]
         
 def normalize_angle(angle):
