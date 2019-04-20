@@ -47,7 +47,7 @@ def normalize_angle(angle):
 def compute_error(now_position, rotation, goal):
     vector_error = Point(goal.x - now_position.x, goal.y - now_position.y, 0.0)
     distance_error = sqrt(pow((vector_error.x), 2) + pow((vector_error.y), 2))
-    angle_error = ( atan2(vector_error.y, vector_error.x) - rotation )/pi*180.0
+    angle_error = ( atan2(vector_error.y, vector_error.x) - rotation )
     rospy.loginfo(" x: "+str(now_position.x)+" y: "+str(now_position.y)+" goal x: "+str(goal.x)+" y: "+str(goal.y)+" dis_e: "+str(distance_error)+" angle_error: "+str(angle_error)+" rotation: "+str(rotation) +" direct: "+ str(atan2(vector_error.y, vector_error.x)))
     return distance_error, angle_error
 
@@ -68,16 +68,16 @@ class NavSquare():
         r = rospy.Rate(rate)
         
         # Set the parameters for the target square
-        goal_distance = rospy.get_param("~goal_distance", 0.5)      # meters
+        goal_distance = rospy.get_param("~goal_distance", 0.8)      # meters
         # goal_angle = radians(rospy.get_param("~goal_angle", 90))    # degrees converted to radians
-        linear_max_speed = rospy.get_param("~linear_max_speed", 0.2)        # meters per second
+        linear_max_speed = rospy.get_param("~linear_max_speed", 0.06)        # meters per second
         angular_max_speed = rospy.get_param("~angular_max_speed", 0.2)      # radians per second
         linear_min_speed = rospy.get_param("~linear_min_speed", 0.01)        # meters per second
         angular_min_speed = rospy.get_param("~angular_min_speed", 0.05)      # radians per second
         angular_tolerance = radians(rospy.get_param("~angular_tolerance", 2)) # degrees to radians
-        distance_tolerance = radians(rospy.get_param("~distance_tolerance", 0.03)) # degrees to radians
-        linear_Kp = radians(rospy.get_param("~linear_Kp", 0.5)) # degrees to radians
-        angular_Kp = radians(rospy.get_param("~angular_Kp", 0.05)) # degrees to radians
+        distance_tolerance = (rospy.get_param("~distance_tolerance", 0.02)) # degrees to radians
+        linear_Kp = (rospy.get_param("~linear_Kp", 0.5)) # degrees to radians
+        angular_Kp = (rospy.get_param("~angular_Kp", 0.2)) # degrees to radians
         
         # Publisher to control the robot's speed
         self.cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
@@ -127,7 +127,7 @@ class NavSquare():
             # Initialize the movement command
             move_cmd = Twist()
 
-            goal = waypoints[i];
+            goal = waypoints[i]
 
             # Get the starting position values     
             (position, rotation) = self.get_odom()
@@ -136,7 +136,7 @@ class NavSquare():
             (distance_error, angle_error) = compute_error(now_position, rotation, goal)
 
 
-            if abs(angle_error) > 60.0:
+            if abs(angle_error) > 0.6:
                 # Set the movement command to a rotation
                 angular_speed = angular_max_speed
                 if angle_error > 0:
