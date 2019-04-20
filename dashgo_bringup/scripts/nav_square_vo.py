@@ -31,7 +31,7 @@ import PyKDL
 
 def quat_to_angle(quat):
     rot = PyKDL.Rotation.Quaternion(quat.x, quat.y, quat.z, quat.w)
-    return rot.GetRPY()[1]
+    return rot.GetRPY()[2]
         
 def normalize_angle(angle):
     res = angle
@@ -40,6 +40,14 @@ def normalize_angle(angle):
     while res < -pi:
         res += 2.0 * pi
     return res
+
+def compute_error(now_position, rotation, goal):
+    vector_error = Point(goal.x - now_position.x, goal.y - now_position.y, 0.0)
+    distance_error = sqrt(pow((vector_error.x), 2) + pow((vector_error.y), 2))
+    angle_error = ( atan2(vector_error.y, vector_error.x) - rotation )/pi*180.0
+    rospy.loginfo(" x: "+str(now_position.x)+" y: "+str(now_position.y)+" goal x: "+str(goal.x)+" y: "+str(goal.y)+" dis_e: "+str(distance_error)+" angle_error: "+str(angle_error)+" rotation: "+str(rotation) +" direct: "+ str(atan2(vector_error.y, vector_error.x)))
+    return distance_error, angle_error
+
 
 
 class NavSquare():
@@ -57,15 +65,15 @@ class NavSquare():
         r = rospy.Rate(rate)
         
         # Set the parameters for the target square
-        goal_distance = rospy.get_param("~goal_distance", 1.0)      # meters
-        goal_angle = radians(rospy.get_param("~goal_angle", 90))    # degrees converted to radians
+        goal_distance = rospy.get_param("~goal_distance", 0.5)      # meters
+        # goal_angle = radians(rospy.get_param("~goal_angle", 90))    # degrees converted to radians
         linear_max_speed = rospy.get_param("~linear_max_speed", 0.2)        # meters per second
-        angular_max_speed = rospy.get_param("~angular_max_speed", 0.7)      # radians per second
+        angular_max_speed = rospy.get_param("~angular_max_speed", 0.2)      # radians per second
         linear_min_speed = rospy.get_param("~linear_min_speed", 0.02)        # meters per second
-        angular_min_speed = rospy.get_param("~angular_min_speed", 0.07)      # radians per second
+        angular_min_speed = rospy.get_param("~angular_min_speed", 0.01)      # radians per second
         angular_tolerance = radians(rospy.get_param("~angular_tolerance", 2)) # degrees to radians
         distance_tolerance = radians(rospy.get_param("~distance_tolerance", 0.02)) # degrees to radians
-        linear_Kp = radians(rospy.get_param("~linear_Kp", 1)) # degrees to radians
+        linear_Kp = radians(rospy.get_param("~linear_Kp", 2)) # degrees to radians
         angular_Kp = radians(rospy.get_param("~angular_Kp", 0.02)) # degrees to radians
         
         # Publisher to control the robot's speed
@@ -75,7 +83,7 @@ class NavSquare():
         self.base_frame = rospy.get_param('~base_frame', '/base_footprint')
 
         # The odom frame is usually just /odom
-        self.odom_frame = rospy.get_param('~odom_frame', '/odom')
+        self.odom_frame = rospy.get_param('~odom_frame', '/map')
 
         # Initialize the tf listener
         self.tf_listener = tf.TransformListener()
@@ -121,34 +129,32 @@ class NavSquare():
             # Get the starting position values     
             (position, rotation) = self.get_odom()
             
-            now_position = Point(position.z, position.x, 0.0)
-            vector_error = goal - now_position
-            distance_error = sqrt(pow((vector_error.x), 2) + pow((vector_error.y), 2))
-            angle_error = atan2(vector_error.y, vector_error.x)/pi*180.0 - rotation
-            
-            if abs(angle_error) > 30.0:
-                # Set the movement command to a rotation
-                if angle_error > 0:
-                    move_cmd.angular.z = angular_speed
-                else:
-                    move_cmd.angular.z = -angular_speed
-                
-                # Begin the rotation
-                while abs(angle_error) > abs(angular_tolerance) and not rospy.is_shutdown():
-                    # Publish the Twist message and sleep 1 cycle         
-                    self.cmd_vel.publish(move_cmd)
-                    
-                    r.sleep()
-                    
-                    # Get the current rotation
-                    (position, rotation) = self.get_odom()
-                    
-                    now_position = Point(position.z, position.x, 0.0)
-                    vector_error = goal - now_position
-                    distance_error = sqrt(pow((vector_error.x), 2) + pow((vector_error.y), 2))
-                    angle_error = atan2(vector_error.y, vector_error.x)/pi*180.0 - rotation
+            now_position = Point(-position.z, position.x, 0.0)
+            (distance_error, angle_error) = compute_error(now_position, rotation, goal)
 
-            while abs(angle_error) > abs(angular_tolerance) and distance_error > abs(distance_tolerance) and not rospy.is_shutdown():
+
+            # if abs(angle_error) > 60.0:
+            #     # Set the movement command to a rotation
+            #     angular_speed = angular_max_speed
+            #     if angle_error > 0:
+            #         move_cmd.angular.z = angular_speed
+            #     else:
+            #         move_cmd.angular.z = -angular_speed
+                
+            #     # Begin the rotation
+            #     while abs(angle_error) > abs(angular_tolerance) and not rospy.is_shutdown():
+            #         # Publish the Twist message and sleep 1 cycle         
+            #         self.cmd_vel.publish(move_cmd)
+                    
+            #         r.sleep()
+                    
+            #         # Get the current rotation
+            #         (position, rotation) = self.get_odom()
+                    
+            #         now_position = Point(-position.z, position.x, 0.0)
+            #         (distance_error, angle_error) = compute_error(now_position, rotation, goal)
+
+            while ( abs(angle_error) > abs(angular_tolerance) or distance_error > abs(distance_tolerance) ) and not rospy.is_shutdown():
                 linear_speed = linear_Kp*distance_error
                 if abs(linear_speed) > abs(linear_max_speed):
                     linear_speed = linear_max_speed;
@@ -163,10 +169,10 @@ class NavSquare():
                     linear_speed = angular_max_speed;
                 if abs(angular_speed) < abs(angular_min_speed):
                     linear_speed = angular_min_speed
-                if angle_error > 0:
-                    move_cmd.angular.z = angular_speed
-                else:
-                    move_cmd.angular.z = -angular_speed
+                # if angle_error > 0:
+                #     move_cmd.angular.z = angular_speed
+                # else:
+                #     move_cmd.angular.z = -angular_speed
 
                 # Publish the Twist message and sleep 1 cycle         
                 self.cmd_vel.publish(move_cmd)
@@ -176,10 +182,8 @@ class NavSquare():
                 # Get the current rotation
                 (position, rotation) = self.get_odom()
                 
-                now_position = Point(position.z, position.x, 0.0)
-                vector_error = goal - now_position
-                distance_error = sqrt(pow((vector_error.x), 2) + pow((vector_error.y), 2))
-                angle_error = atan2(vector_error.y, vector_error.x)/pi*180.0 - rotation
+                now_position = Point(-position.z, position.x, 0.0)
+                (distance_error, angle_error) = compute_error(now_position, rotation, goal)
 
 
 
@@ -252,7 +256,6 @@ class NavSquare():
         except (tf.Exception, tf.ConnectivityException, tf.LookupException):
             rospy.loginfo("TF Exception")
             return
-        rospy.loginfo("x: "+str(Point(*trans).z)+"y: "+str(Point(*trans).x))
         return (Point(*trans), quat_to_angle(Quaternion(*rot)))
             
     def shutdown(self):
